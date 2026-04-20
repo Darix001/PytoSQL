@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from array import array
+from itertools import starmap
 from typing import Any, Self
 
 from frozendict import frozendict
@@ -72,6 +74,17 @@ class Querier:
     def __getattr__(self, name: str) -> Self:
         self._last = name
         return self
+
+    def __str__(self, /) -> str:
+        buffer = array("u")
+        for stmt, (args, kw) in vars(self).items():
+            buffer.append(stmt)
+            if args:
+                buffer.append(" ")
+                buffer.extend(", ".join(map(str, args)))
+            if kw:
+                buffer.extend(", ".join(starmap("{} {}".format, kw.items())))
+        return buffer.tounicode()
 
 
 if __name__ == "__main__":
