@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, make_dataclass, replace
 from functools import partial
 from io import StringIO
 from itertools import starmap
@@ -17,9 +17,9 @@ class MethodFallBack:
         return partial(CallableExpr.make, name, self)
 
 
-@dataclass_decorator
-class Parameter(MethodFallBack):
-    value: Any
+Parameter = make_dataclass(
+    "Parameter", [("value", Any)], bases=(MethodFallBack,), slots=True, frozen=True
+)
 
 
 @dataclass_decorator
@@ -40,8 +40,8 @@ class Expr(MethodFallBack):
 @dataclass_decorator
 class CallableExpr(MethodFallBack):
     function_name: str
-    args: tuple[Any, ...] = ()
-    kwargs: dict[str, Any] | None = None
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
 
     @classmethod
     def make(cls, function_name: str, *args, **kwargs) -> CallableExpr:
