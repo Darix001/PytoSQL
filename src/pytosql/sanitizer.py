@@ -1,5 +1,5 @@
-from collections.abc import Sequence
-from operator import attrgetter
+from functools import partial
+from operator import concat
 from string.templatelib import Template
 from types import ModuleType
 from typing import Any, Callable
@@ -9,8 +9,6 @@ from more_itertools import interleave_longest
 tuple_sanitizer_type = Callable[[Template], tuple[str, tuple[Any]]]
 
 dict_sanitizer_type = Callable[[Template], tuple[str, dict[str, Any]]]
-
-get_expression = attrgetter("expression")
 
 
 def get_sanitizer(
@@ -39,7 +37,7 @@ def create_named_sanitizer(format_func: Callable[[str], str]) -> dict_sanitizer_
 sanitizers: dict[str, tuple_sanitizer_type | dict_sanitizer_type] = {
     "qmark": static_symbol_sanitizer("?"),
     # "numeric": numeric_sanitizer,
-    # "named": named_sanitizer,
-    # "pyformat": pyformat_sanitizer,
+    "named": create_named_sanitizer(partial(concat, ":")),
+    "pyformat": create_named_sanitizer("%({})s".format),
     "format": static_symbol_sanitizer("%s"),
 }
