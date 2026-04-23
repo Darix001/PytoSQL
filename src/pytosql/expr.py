@@ -32,7 +32,7 @@ class Expr(MethodFallBack):
 
     def __getattr__(self, name: str, /) -> Expr | Callable[..., CallableExpr]:
         if len(self.attrs) >= self.max_deepness:
-            return super().__getattr__(name)
+            return partial(CallableExpr.make, name, self)
         else:
             return replace(self, attrs=self.attrs + (name,))
 
@@ -41,11 +41,13 @@ class Expr(MethodFallBack):
 class CallableExpr(MethodFallBack):
     function_name: str
     args: tuple[Any, ...]
-    kwargs: dict[str, Any]
 
     @classmethod
-    def make(cls, function_name: str, *args, **kwargs) -> CallableExpr:
-        return cls(function_name, args, kwargs)
+    def make(cls, function_name: str, *args) -> CallableExpr:
+        return cls(function_name, args)
+
+    def __str__(self, /) -> str:
+        return f"{self.function_name}({', '.join(map(str, self.args))})"
 
 
 class Querier:
@@ -67,22 +69,29 @@ class Querier:
         self._last = name
         return self
 
-    def __str__(self, /) -> str:
+    def prepare(self, /) -> tuple[str, list[Any]]:
+        parameters = []
         with StringIO() as buffer:
+            args_printer = partial(print, sep=", ", end="", file=buffer)
             for stmt, (args, kw) in vars(self).items():
-                buffer.write(stmt)
-                if args:
-                    buffer.write(" ")
-                    buffer.write(", ".join(map(str, args)))
+                buffer.writelines((stmt, " "))
+                args_printer(*args)
                 if kw:
-                    buffer.write(", ".join(starmap("{!s} as {!s}".format, kw.items())))
-            return buffer.getvalue()
+                    buffer.writelines(
+                        (", ", ", ".join(starmap("{!s} as {!s}".format, kw.items())))
+                    )
+                buffer.write("\n")
+            return buffer.getvalue(), parameters
 
+    def __str__(self, /) -> str:
+        return self.prepare()[0]
+
+
+col = Expr(1)
+table = Expr(2)
+schema = Expr(3)
+db = Expr(4)
 
 if __name__ == "__main__":
-    expr1 = Expr(4, ("a", "b", "c"))
-    expr2 = Expr(4).a.b.c
-    print(expr1, expr2, expr1 == expr2)
-
     querier = Querier()
-    print(vars(querier.select(expr1).filter(expr2)))
+    print(querier.select(col.name).filter(table.employees.salary.round()))
