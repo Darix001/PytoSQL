@@ -13,8 +13,33 @@ dataclass_decorator = dataclass(slots=True, frozen=True)
 class MethodFallBack:
     __slots__ = ()
 
+    def operator_function(op_symbol: str, /):
+        def wrapper(self, other) -> OperatorExpr:
+            return OperatorExpr(self, op_symbol, other)
+
+        return wrapper
+
+    __add__, __sub__, __mul__, __truediv__ = map(operator_function, "+-*/")
+
+    __eq__, __ne__, __lt__, __le__, __gt__, __ge__ = map(
+        operator_function, ("==", "!=", "<", "<=", ">", ">=")
+    )
+
+    __and__, __or__, __xor__ = map(operator_function, "&|^")
+
+    __lshift__, __rshift__ = map(operator_function, ("<<", ">>"))
+
+    __concat__ = __matmul__ = operator_function("||")
+
     def __getattr__(self, name: str, /) -> Callable[..., CallableExpr]:
         return partial(CallableExpr.make, name, self)
+
+
+@dataclass_decorator
+class OperatorExpr(MethodFallBack):
+    left: Any
+    op_symbol: str
+    right: Any
 
 
 Parameter = make_dataclass(
@@ -83,9 +108,6 @@ class Querier:
                 buffer.write("\n")
             return buffer.getvalue(), parameters
 
-    def __str__(self, /) -> str:
-        return self.prepare()[0]
-
 
 col = Expr(1)
 table = Expr(2)
@@ -94,4 +116,4 @@ db = Expr(4)
 
 if __name__ == "__main__":
     querier = Querier()
-    print(querier.select(col.name).filter(table.employees.salary.round()))
+    print(querier.select(col.name).where(table.employees.salary.round()).prepare())
