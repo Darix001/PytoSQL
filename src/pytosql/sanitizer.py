@@ -24,7 +24,15 @@ def static_symbol_sanitizer(symbol: str) -> tuple_sanitizer_type:
     return sanitizer
 
 
-def create_named_sanitizer(format_func: Callable[[str], str]) -> dict_sanitizer_type:
+def create_named_sanitizer(
+    preffix: str, suffix: str | None = None
+) -> dict_sanitizer_type:
+    format_func = (
+        partial(concat, preffix)
+        if suffix is None
+        else lambda name: f"{preffix}{name}{suffix}"
+    )
+
     def sanitizer(template: Template) -> tuple[str, dict[str, Any]]:
         names = [interpolation.expression for interpolation in template.interpolations]
         return "".join(
@@ -37,7 +45,7 @@ def create_named_sanitizer(format_func: Callable[[str], str]) -> dict_sanitizer_
 sanitizers: dict[str, tuple_sanitizer_type | dict_sanitizer_type] = {
     "qmark": static_symbol_sanitizer("?"),
     # "numeric": numeric_sanitizer,
-    "named": create_named_sanitizer(partial(concat, ":")),
-    "pyformat": create_named_sanitizer("%({})s".format),
+    "named": create_named_sanitizer(preffix=":"),
+    "pyformat": create_named_sanitizer(preffix="%(", suffix=")s"),
     "format": static_symbol_sanitizer("%s"),
 }
