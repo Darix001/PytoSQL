@@ -1,5 +1,6 @@
 from functools import partial
-from operator import concat
+from operator import concat, mod
+from re import sub
 from string.templatelib import Template
 from types import ModuleType
 from typing import Any, Callable
@@ -36,16 +37,26 @@ def create_named_sanitizer(
     def sanitizer(template: Template) -> tuple[str, dict[str, Any]]:
         names = [interpolation.expression for interpolation in template.interpolations]
         return "".join(
-            interleave_longest(map(format_func, names), template.strings)
+            interleave_longest(template.strings, map(format_func, names))
         ), dict(zip(names, template.values))
+
+    return sanitizer
+
+
+def create_numeric_sanitizer(preffix: str) -> tuple_sanitizer_type:
+    fmt_func = partial(mod, preffix + "%d")
+
+    def sanitizer(template: Template) -> tuple[str, tuple[Any]]:
+        str_indexes = map(fmt_func, range(len(values := template.values)))
+        return "".join(interleave_longest(template.strings, str_indexes)), values
 
     return sanitizer
 
 
 sanitizers: dict[str, tuple_sanitizer_type | dict_sanitizer_type] = {
     "qmark": static_symbol_sanitizer("?"),
-    # "numeric": numeric_sanitizer,
-    "named": create_named_sanitizer(preffix=":"),
-    "pyformat": create_named_sanitizer(preffix="%(", suffix=")s"),
+    "numeric": create_numeric_sanitizer(":"),
+    "named": create_named_sanitizer(":"),
+    "pyformat": create_named_sanitizer("%(", ")s"),
     "format": static_symbol_sanitizer("%s"),
 }

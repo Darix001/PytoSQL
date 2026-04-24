@@ -1,20 +1,22 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, make_dataclass, replace
+from dataclasses import dataclass, replace
 from functools import partial
 from io import StringIO
 from itertools import starmap
 from typing import Any, Self
 
-dataclass_decorator = dataclass(slots=True, frozen=True)
+dataclass_decorator = dataclass(slots=True, frozen=True, order=False, eq=False)
 
 
-class MethodFallBack:
+class BaseExpr:
     __slots__ = ()
 
-    def operator_function(op_symbol: str, /):
-        def wrapper(self, other) -> OperatorExpr:
+    def operator_function(op_symbol: str, /) -> Callable[[Self, Any], OperatorExpr]:
+        def wrapper(self, other: Any) -> OperatorExpr:
+            if not isinstance(other, BaseExpr):
+                other = Parameter(other)
             return OperatorExpr(self, op_symbol, other)
 
         return wrapper
@@ -36,19 +38,28 @@ class MethodFallBack:
 
 
 @dataclass_decorator
-class OperatorExpr(MethodFallBack):
+class OperatorExpr(BaseExpr):
     left: Any
     op_symbol: str
     right: Any
 
+    def __str__(self, /) -> str:
+        return f"({self.left} {self.op_symbol} {self.right})"
+
 
 @dataclass_decorator
-class Parameter(MethodFallBack):
+class Parameter(BaseExpr):
     value: Any
 
+    def __str__(self, /) -> str:
+        return "?"
+
+
+Param = Parameter
+
 
 @dataclass_decorator
-class Expr(MethodFallBack):
+class Expr(BaseExpr):
     max_deepness: int
     attrs: tuple[str, ...] = ()
 
@@ -63,7 +74,7 @@ class Expr(MethodFallBack):
 
 
 @dataclass_decorator
-class CallableExpr(MethodFallBack):
+class CallableExpr(BaseExpr):
     function_name: str
     args: tuple[Any, ...]
 
@@ -99,11 +110,11 @@ class Querier:
         with StringIO() as buffer:
             args_printer = partial(print, sep=", ", end="", file=buffer)
             for stmt, (args, kw) in vars(self).items():
-                buffer.writelines((stmt, " "))
+                buffer.writelines((stmt.replace("_", " "), " "))
                 args_printer(*args)
                 if kw:
                     buffer.writelines(
-                        (", ", ", ".join(starmap("{!s} as {!s}".format, kw.items())))
+                        (", ", ", ".join(starmap("{1!s} as {0!s}".format, kw.items())))
                     )
                 buffer.write("\n")
             return buffer.getvalue(), parameters
@@ -116,4 +127,9 @@ db = Expr(4)
 
 if __name__ == "__main__":
     querier = Querier()
-    print(querier.select(col.name).where(table.employees.salary.round()).prepare())
+    print(
+        *querier.select(col.name, fmt_salary=Param("{:,.2f}").format(col.salary))
+        .from_(table.employees)
+        .where(col.salary > 0)
+        .prepare()
+    )
