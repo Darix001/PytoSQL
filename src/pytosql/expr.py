@@ -4,7 +4,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from functools import partial
 from io import StringIO
-from itertools import starmap
 from typing import Any, Self
 
 dataclass_decorator = dataclass(slots=True, frozen=True, order=False, eq=False)
