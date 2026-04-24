@@ -42,9 +42,9 @@ class OperatorExpr(MethodFallBack):
     right: Any
 
 
-Parameter = make_dataclass(
-    "Parameter", [("value", Any)], bases=(MethodFallBack,), slots=True, frozen=True
-)
+@dataclass_decorator
+class Parameter(MethodFallBack):
+    value: Any
 
 
 @dataclass_decorator
