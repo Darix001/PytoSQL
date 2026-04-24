@@ -114,9 +114,9 @@ class Querier:
                 buffer.writelines((stmt.replace("_", " "), " "))
                 args_printer(*args)
                 if kw:
-                    buffer.writelines(
-                        (", ", ", ".join(starmap("{1!s} as {0!s}".format, kw.items())))
-                    )
+                    buffer.write(", ")
+                    for k, v in kw.items():
+                        buffer.writelines((f"{v} as {k}"))
                 buffer.write("\n")
             return buffer.getvalue(), parameters
 
