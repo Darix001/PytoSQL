@@ -1,6 +1,5 @@
 from functools import partial
 from operator import concat, mod
-from re import sub
 from string.templatelib import Template
 from types import ModuleType
 from typing import Any, Callable

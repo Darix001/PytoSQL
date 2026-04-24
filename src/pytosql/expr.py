@@ -50,9 +50,10 @@ class OperatorExpr(BaseExpr):
 @dataclass_decorator
 class Parameter(BaseExpr):
     value: Any
+    name: str | None = None
 
     def __str__(self, /) -> str:
-        return "?"
+        return self.name or "?"
 
 
 Param = Parameter
@@ -130,6 +131,6 @@ if __name__ == "__main__":
     print(
         *querier.select(col.name, fmt_salary=Param("{:,.2f}").format(col.salary))
         .from_(table.employees)
-        .where(col.salary > 0)
+        .where(col.salary > Param(0))
         .prepare()
     )
