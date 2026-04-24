@@ -60,6 +60,17 @@ Param = Parameter
 
 
 @dataclass_decorator
+class Literal(BaseExpr):
+    text: str
+
+    def __str__(self, /) -> str:
+        return self.text
+
+
+Lit = Literal
+
+
+@dataclass_decorator
 class Expr(BaseExpr):
     max_deepness: int
     attrs: tuple[str, ...] = ()
@@ -113,10 +124,11 @@ class Querier:
             for stmt, (args, kw) in vars(self).items():
                 buffer.writelines((stmt.replace("_", " "), " "))
                 args_printer(*args)
+
                 if kw:
                     buffer.write(", ")
                     for k, v in kw.items():
-                        buffer.writelines((f"{v} as {k}"))
+                        buffer.writelines(f"{v} as {k}")
                 buffer.write("\n")
             return buffer.getvalue(), parameters
 
