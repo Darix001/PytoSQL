@@ -59,7 +59,7 @@ class Parameter(BaseExpr):
         positional_symbol = ctx.positional_symbol
 
         if (fmt := ctx.named_format) is not None and (name := self.name) is not None:
-            ctx.param_list.append((name, value))
+            ctx.param_dict[name] = value
             return fmt.format(name)
 
         ctx.param_list.append(value)
@@ -138,8 +138,8 @@ class Querier:
         self._last = name
         return self
 
-    def prepare(self, /) -> tuple[str, tuple[Any] | dict[str, Any]]:
-        with StringIO() as buffer, get_context() as current_context:
+    def prepare(self, /) -> tuple[str, list[Any] | dict[str, Any]]:
+        with StringIO() as buffer, get_context() as ctx:
             args_printer = partial(print, sep=", ", end="", file=buffer)
             for stmt, (args, kw) in vars(self).items():
                 buffer.writelines((stmt.replace("_", " "), " "))
@@ -150,11 +150,7 @@ class Querier:
                     for k, v in kw.items():
                         buffer.writelines(f"{v._render()} as {k}")
                 buffer.write("\n")
-            if current_context.paramstyle in (ParamStyle.NAMED, ParamStyle.PYFORMAT):
-                values = dict(current_context.param_list)
-            else:
-                values = tuple(current_context.param_list)
-            return buffer.getvalue(), values
+            return buffer.getvalue(), ctx.param_list.copy() or ctx.param_dict.copy()
 
 
 # T = TypeVar("T")

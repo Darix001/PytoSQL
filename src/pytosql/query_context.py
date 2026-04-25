@@ -34,6 +34,7 @@ class ParamContext:
     auto_increment: bool = False  # Auto-number named params as positional
     param_counter: int = field(default=0, repr=False)
     param_list: list = field(default_factory=list, repr=False)
+    param_dict: dict = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_db_module(cls, db_module: ModuleType, /):
@@ -47,6 +48,7 @@ class ParamContext:
 
     def __exit__(self, *args):
         self.param_list.clear()
+        self.param_dict.clear()
         self.param_counter = 0
         _current_context.reset(self.token)
 
