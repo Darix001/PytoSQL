@@ -1,4 +1,4 @@
-from __future__ import annotations
+# Don't know what to do with this module.
 
 from collections.abc import Callable
 from dataclasses import dataclass, replace
