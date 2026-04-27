@@ -3,9 +3,9 @@ from dataclasses import dataclass, replace
 from functools import partial
 from io import StringIO
 from operator import methodcaller
-from typing import Any, Self, TypeVar
+from typing import Any, Self
 
-from .query_context import ParamStyle, get_context, set_context
+from .query_context import _current_collector, parameters_collector
 
 dataclass_decorator = dataclass(slots=True, frozen=True, order=False, eq=False)
 
@@ -24,7 +24,7 @@ class BaseExpr:
     __add__, __sub__, __mul__, __truediv__ = map(operator_function, "+-*/")
 
     __eq__, __ne__, __lt__, __le__, __gt__, __ge__ = map(
-        operator_function, ("==", "!=", "<", "<=", ">", ">=")
+        operator_function, ("=", "<>", "<", "<=", ">", ">=")
     )
 
     __and__, __or__, __xor__ = map(operator_function, "&|^")
@@ -32,6 +32,8 @@ class BaseExpr:
     __lshift__, __rshift__ = map(operator_function, ("<<", ">>"))
 
     __concat__ = __matmul__ = operator_function("||")
+
+    glob, like = map(operator_function, ("glob", "like"))
 
     def __getattr__(self, name: str, /) -> Callable[..., CallableExpr]:
         return partial(CallableExpr.make, name, self)
@@ -53,23 +55,26 @@ class Parameter(BaseExpr):
     name: str | None = None
 
     def _render(self, /) -> str:
-        ctx = get_context()
+        collector = _current_collector.get()
         value = self.value
-        ctx.param_counter += 1
-        positional_symbol = ctx.positional_symbol
+        paramstyle_ctx = collector.param_context
+        positional_symbol = paramstyle_ctx.positional_symbol
 
-        if (fmt := ctx.named_format) is not None and (name := self.name) is not None:
-            ctx.param_dict[name] = value
-            return fmt.format(name)
+        if (name := self.name) is not None:
+            if (fmt := paramstyle_ctx.named_format) is None:
+                raise ValueError("Name set with no Named format.")
+            paramstyle_ctx.params_dict[name] = value
+            return fmt.format(name=name)
 
-        ctx.param_list.append(value)
-        if ctx.auto_increment:
-            return f"{positional_symbol}{ctx.param_counter}"
+        collector.params_list.append(value)
+        if fmt := paramstyle_ctx.numeric_format:
+            collector.param_counter += 1
+            return fmt.format(number=paramstyle_ctx.param_counter)
         elif positional_symbol:
             return positional_symbol
         else:
             raise ValueError(
-                f"Could not render parameter: {self} for paramstyle: {ctx.paramstyle}"
+                f"The current parameter style context does not support positional parameters: {paramstyle_ctx}"
             )
 
 
@@ -119,8 +124,17 @@ class CallableExpr(BaseExpr):
         return f"{self.function_name}({', '.join(map(str, self.args))})"
 
 
+# dictionary that sotres specific statement separators.
+# returns a tuple where the first element is the separator
+# for multiple conditions and the second is the separator for key-value pairs.
+
+
 class Querier:
     _last: str
+    stmts_seps: dict[str, tuple[str, str]] = {
+        "where": (" and ", " = "),
+        "select": (", ", " as "),
+    }
 
     def __init__(self, /, function_name: str | None = None):
         if function_name:
@@ -138,19 +152,27 @@ class Querier:
         self._last = name
         return self
 
-    def prepare(self, /) -> tuple[str, list[Any] | dict[str, Any]]:
-        with StringIO() as buffer, get_context() as ctx:
-            args_printer = partial(print, sep=", ", end="", file=buffer)
+    def prepare(self, /) -> tuple[str, tuple[Any] | dict[str, Any]]:
+        with StringIO() as buffer, parameters_collector() as ctx:
+            args_printer = partial(print, end="", file=buffer)
             for stmt, (args, kw) in vars(self).items():
-                buffer.writelines((stmt.replace("_", " "), " "))
-                args_printer(*map(methodcaller("_render"), args))
+                buffer.writelines((stmt.replace("_", " ").strip(), " "))
+                args_sep, kw_sep = self.stmts_seps.get(stmt, (", ", " = "))
+                args_printer(*map(methodcaller("_render"), args), sep=args_sep)
 
                 if kw:
                     buffer.write(", ")
                     for k, v in kw.items():
                         buffer.writelines(f"{v._render()} as {k}")
                 buffer.write("\n")
-            return buffer.getvalue(), ctx.param_list.copy() or ctx.param_dict.copy()
+
+                if ctx.params_dict and ctx.params_list:
+                    raise ValueError("Mix of named and positional parameters")
+                elif ctx.params_list:
+                    data = tuple(ctx.params_list)
+                elif ctx.params_dict:
+                    data = ctx.params_dict.copy()
+            return buffer.getvalue(), data
 
 
 # T = TypeVar("T")
@@ -164,10 +186,10 @@ class AttrFactory:
         return self.factory(name)
 
 
-col = Expr(1)
-table = Expr(2)
+column = col = Expr(1)
+table = tbl = Expr(2)
 schema = Expr(3)
-db = Expr(4)
+database = db = Expr(4)
 
 fn = AttrFactory(partial(partial, CallableExpr))
 query = AttrFactory(Querier)
